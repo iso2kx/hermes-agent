@@ -250,6 +250,9 @@ class GatewayRunner:
         # Track pending exec approvals per session
         # Key: session_key, Value: {"command": str, "pattern_key": str}
         self._pending_approvals: Dict[str, Dict[str, str]] = {}
+
+        # Voice mode toggle per session key
+        self._voice_mode: Dict[str, bool] = {}
         
         # Initialize session database for session_search tool support
         self._session_db = None
@@ -868,7 +871,7 @@ class GatewayRunner:
                           "compress", "usage", "insights", "reload-mcp", "reload_mcp",
                           "update", "title", "resume", "provider", "rollback",
                           "background", "reasoning", "role",
-                          "ps", "kill", "log"}
+                          "ps", "kill", "log", "voice"}
         if command and command in _known_commands:
             await self.hooks.emit(f"command:{command}", {
                 "platform": source.platform.value if source.platform else "",
@@ -948,6 +951,9 @@ class GatewayRunner:
 
         if command == "log":
             return await self._handle_log_command(event)
+
+        if command == "voice":
+            return await self._handle_voice_command(event)
 
         # User-defined quick commands (bypass agent loop, no LLM call)
         if command:
@@ -2447,6 +2453,17 @@ class GatewayRunner:
             output = output[-3500:]
         return f"**Log: `{proc_id}`** (last {limit} lines)\n\n```\n{output}\n```"
 
+    async def _handle_voice_command(self, event: MessageEvent) -> str:
+        """Handle /voice command -- toggle voice reply mode."""
+        source = event.source
+        session_key = build_session_key(source)
+        current = self._voice_mode.get(session_key, False)
+        self._voice_mode[session_key] = not current
+        state = "ON" if not current else "OFF"
+        if not current:
+            return f"Voice mode: **{state}**\nI'll reply with voice messages from now on."
+        return f"Voice mode: **{state}**\nSwitched back to text replies."
+
     async def _handle_compress_command(self, event: MessageEvent) -> str:
         """Handle /compress command -- manually compress conversation context."""
         source = event.source
@@ -3382,6 +3399,15 @@ class GatewayRunner:
             combined_ephemeral = context_prompt or ""
             if self._ephemeral_system_prompt:
                 combined_ephemeral = (combined_ephemeral + "\n\n" + self._ephemeral_system_prompt).strip()
+
+            # Voice mode: instruct agent to always use TTS for responses
+            if self._voice_mode.get(session_key):
+                combined_ephemeral += (
+                    "\n\n## Voice Mode (ACTIVE)\n"
+                    "The user has enabled voice mode. After composing your text response, "
+                    "ALWAYS call the `text_to_speech` tool to convert your response to audio. "
+                    "Keep text responses concise (under 500 chars) for natural voice delivery."
+                )
 
             # Re-read .env and config for fresh credentials (gateway is long-lived,
             # keys may change without restart).
