@@ -189,6 +189,13 @@ def build_session_context_prompt(context: SessionContext) -> str:
     except Exception:
         pass
     
+    # Multi-user group awareness
+    if context.source.chat_type == "group":
+        lines.append("")
+        lines.append("**Multi-User Group Context:**")
+        lines.append("Messages from group members are prefixed with `[Name]:` to identify who is speaking.")
+        lines.append("Address each user by name when responding. Remember that different users may have different contexts and questions.")
+
     # Connected platforms
     platforms_list = ["local (files on this machine)"]
     for p in context.connected_platforms:

@@ -1334,6 +1334,11 @@ class GatewayRunner:
         # tool even when they appear in the same message.
         # -----------------------------------------------------------------
         message_text = event.text or ""
+
+        # Multi-user awareness: prefix group messages with sender identity
+        if source.chat_type == "group" and source.user_name:
+            message_text = f"[{source.user_name}]: {message_text}"
+
         if event.media_urls:
             image_paths = []
             for i, path in enumerate(event.media_urls):
