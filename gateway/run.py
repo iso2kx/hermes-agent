@@ -980,21 +980,30 @@ class GatewayRunner:
             except Exception as e:
                 logger.debug("Skill command check failed (non-fatal): %s", e)
         
-        # Check for pending exec approval responses
+        # Check for pending exec approval responses (admin-only in multi-user mode)
         session_key_preview = build_session_key(source)
         if session_key_preview in self._pending_approvals:
             user_text = event.text.strip().lower()
             if user_text in ("yes", "y", "approve", "ok", "go", "do it"):
+                # Only admins can approve dangerous commands
+                from gateway.roles import is_admin
+                platform_name = source.platform.value if source.platform else ""
+                if not is_admin(platform_name, source.user_id or ""):
+                    return "Only admins can approve dangerous commands."
                 approval = self._pending_approvals.pop(session_key_preview)
                 cmd = approval["command"]
                 pattern_key = approval.get("pattern_key", "")
-                logger.info("User approved dangerous command: %s...", cmd[:60])
+                logger.info("Admin %s approved dangerous command: %s...", source.user_id, cmd[:60])
                 from tools.terminal_tool import terminal_tool
                 from tools.approval import approve_session
                 approve_session(session_key_preview, pattern_key)
                 result = terminal_tool(command=cmd, force=True)
                 return f"✅ Command approved and executed.\n\n```\n{result[:3500]}\n```"
             elif user_text in ("no", "n", "deny", "cancel", "nope"):
+                from gateway.roles import is_admin
+                platform_name = source.platform.value if source.platform else ""
+                if not is_admin(platform_name, source.user_id or ""):
+                    return "Only admins can approve or deny dangerous commands."
                 self._pending_approvals.pop(session_key_preview)
                 return "❌ Command denied."
             elif user_text in ("full", "show", "view", "show full", "view full"):
