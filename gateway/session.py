@@ -176,6 +176,18 @@ def build_session_context_prompt(context: SessionContext) -> str:
         lines.append(f"**User:** {context.source.user_name}")
     elif context.source.user_id:
         lines.append(f"**User ID:** {context.source.user_id}")
+
+    # User role (if role system is active)
+    try:
+        from gateway.roles import get_role
+        platform_str = context.source.platform.value if context.source.platform else ""
+        user_role = get_role(platform_str, context.source.user_id or "")
+        if user_role:
+            lines.append(f"**User Role:** {user_role}")
+            if user_role == "member":
+                lines.append("_Note: This user has member-level access. Some tools (terminal, file write, code execution) are restricted to admins._")
+    except Exception:
+        pass
     
     # Connected platforms
     platforms_list = ["local (files on this machine)"]

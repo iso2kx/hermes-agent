@@ -262,6 +262,12 @@ class GatewayRunner:
         # DM pairing store for code-based user authorization
         from gateway.pairing import PairingStore
         self.pairing_store = PairingStore()
+
+        # Role-based access control
+        from gateway.roles import ensure_owner_is_admin
+        telegram_allowed = os.getenv("TELEGRAM_ALLOWED_USERS", "")
+        if telegram_allowed:
+            ensure_owner_is_admin("telegram", telegram_allowed)
         
         # Event hook system
         from gateway.hooks import HookRegistry
@@ -861,7 +867,7 @@ class GatewayRunner:
                           "personality", "retry", "undo", "sethome", "set-home",
                           "compress", "usage", "insights", "reload-mcp", "reload_mcp",
                           "update", "title", "resume", "provider", "rollback",
-                          "background", "reasoning"}
+                          "background", "reasoning", "role"}
         if command and command in _known_commands:
             await self.hooks.emit(f"command:{command}", {
                 "platform": source.platform.value if source.platform else "",
@@ -929,7 +935,10 @@ class GatewayRunner:
 
         if command == "reasoning":
             return await self._handle_reasoning_command(event)
-        
+
+        if command == "role":
+            return await self._handle_role_command(event)
+
         # User-defined quick commands (bypass agent loop, no LLM call)
         if command:
             quick_commands = self.config.get("quick_commands", {})
@@ -2288,6 +2297,71 @@ class GatewayRunner:
         else:
             return f"🧠 ✓ Reasoning effort set to `{effort}` (this session only)"
 
+    async def _handle_role_command(self, event: MessageEvent) -> str:
+        """Handle /role command -- manage user roles (admin only).
+
+        Usage:
+            /role                     Show your role and list all roles
+            /role set <user_id> admin Set a user as admin
+            /role set <user_id> member Set a user as member
+            /role remove <user_id>   Remove a user's role
+        """
+        from gateway.roles import (
+            get_role, set_role, remove_role, list_roles,
+            is_admin, ROLE_ADMIN, ROLE_MEMBER, MEMBER_DENIED_TOOLS,
+        )
+
+        source = event.source
+        platform = source.platform.value if source.platform else "unknown"
+        user_id = source.user_id or ""
+        args = event.get_command_args().strip()
+
+        caller_role = get_role(platform, user_id) or "none"
+
+        if not args:
+            # Show current role + list all roles
+            roles = list_roles(platform)
+            lines = [f"Your role: **{caller_role}**\n"]
+            if roles:
+                lines.append("**All roles:**")
+                for r in roles:
+                    name = r.get("user_name") or r["user_id"]
+                    lines.append(f"  {name} ({r['user_id']}): {r['role']}")
+            else:
+                lines.append("No roles assigned yet.")
+            if caller_role == ROLE_MEMBER:
+                denied = ", ".join(sorted(MEMBER_DENIED_TOOLS))
+                lines.append(f"\nRestricted tools (admin only): {denied}")
+            return "\n".join(lines)
+
+        parts = args.split()
+        subcommand = parts[0].lower()
+
+        # Only admins can modify roles
+        if not is_admin(platform, user_id):
+            return "Only admins can manage roles."
+
+        if subcommand == "set" and len(parts) >= 3:
+            target_id = parts[1]
+            role = parts[2].lower()
+            if role not in (ROLE_ADMIN, ROLE_MEMBER):
+                return f"Invalid role. Use `admin` or `member`."
+            set_role(platform, target_id, role, set_by=user_id)
+            return f"Set {target_id} as **{role}**."
+
+        if subcommand == "remove" and len(parts) >= 2:
+            target_id = parts[1]
+            if remove_role(platform, target_id):
+                return f"Removed role for {target_id}."
+            return f"No role found for {target_id}."
+
+        return (
+            "Usage:\n"
+            "  `/role` — show roles\n"
+            "  `/role set <user_id> admin|member` — assign role\n"
+            "  `/role remove <user_id>` — remove role"
+        )
+
     async def _handle_compress_command(self, event: MessageEvent) -> str:
         """Handle /compress command -- manually compress conversation context."""
         source = event.source
@@ -3271,6 +3345,17 @@ class GatewayRunner:
                 fallback_model=self._fallback_model,
             )
             
+            # Filter tools based on user role (members get restricted toolset)
+            from gateway.roles import get_role, filter_tools_for_role
+            platform_name = source.platform.value if source.platform else ""
+            user_role = get_role(platform_name, source.user_id or "")
+            if user_role and hasattr(agent, 'tools') and agent.tools:
+                tool_names = [t["function"]["name"] for t in agent.tools]
+                allowed = filter_tools_for_role(tool_names, user_role)
+                allowed_set = set(allowed)
+                agent.tools = [t for t in agent.tools if t["function"]["name"] in allowed_set]
+                agent.valid_tool_names = allowed_set
+
             # Store agent reference for interrupt support
             agent_holder[0] = agent
             # Capture the full tool definitions for transcript logging

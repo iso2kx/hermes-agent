@@ -71,7 +71,14 @@ def _cmd_approve(store, platform: str, code: str):
         uid = result["user_id"]
         name = result.get("user_name", "")
         display = f"{name} ({uid})" if name else uid
-        print(f"\n  Approved! User {display} on {platform} can now use the bot~")
+
+        # Auto-assign member role if no role exists
+        from gateway.roles import get_role, set_role, ROLE_MEMBER
+        if not get_role(platform, uid):
+            set_role(platform, uid, ROLE_MEMBER, user_name=name, set_by="auto:pairing")
+            print(f"\n  Approved! User {display} on {platform} can now use the bot~ (role: member)")
+        else:
+            print(f"\n  Approved! User {display} on {platform} can now use the bot~")
         print(f"  They'll be recognized automatically on their next message.\n")
     else:
         print(f"\n  Code '{code}' not found or expired for platform '{platform}'.")
