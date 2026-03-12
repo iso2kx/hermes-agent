@@ -867,7 +867,8 @@ class GatewayRunner:
                           "personality", "retry", "undo", "sethome", "set-home",
                           "compress", "usage", "insights", "reload-mcp", "reload_mcp",
                           "update", "title", "resume", "provider", "rollback",
-                          "background", "reasoning", "role"}
+                          "background", "reasoning", "role",
+                          "ps", "kill", "log"}
         if command and command in _known_commands:
             await self.hooks.emit(f"command:{command}", {
                 "platform": source.platform.value if source.platform else "",
@@ -938,6 +939,15 @@ class GatewayRunner:
 
         if command == "role":
             return await self._handle_role_command(event)
+
+        if command == "ps":
+            return await self._handle_ps_command(event)
+
+        if command == "kill":
+            return await self._handle_kill_command(event)
+
+        if command == "log":
+            return await self._handle_log_command(event)
 
         # User-defined quick commands (bypass agent loop, no LLM call)
         if command:
@@ -2370,6 +2380,72 @@ class GatewayRunner:
             "  `/role set <user_id> admin|member` — assign role\n"
             "  `/role remove <user_id>` — remove role"
         )
+
+    async def _handle_ps_command(self, event: MessageEvent) -> str:
+        """Handle /ps command -- list background processes."""
+        from tools.process_registry import process_registry
+
+        sessions = process_registry.list_sessions()
+        if not sessions:
+            return "No background processes running."
+
+        lines = ["**Background Processes:**\n"]
+        for s in sessions:
+            status = s.get("status", "unknown")
+            sid = s.get("session_id", "?")
+            cmd = s.get("command", "?")
+            if len(cmd) > 60:
+                cmd = cmd[:57] + "..."
+            uptime = s.get("uptime_seconds", 0)
+            mins = int(uptime // 60)
+            lines.append(f"`{sid}` — {status} ({mins}m) — `{cmd}`")
+        return "\n".join(lines)
+
+    async def _handle_kill_command(self, event: MessageEvent) -> str:
+        """Handle /kill <proc_id> -- terminate a background process (admin only)."""
+        from gateway.roles import is_admin
+        from tools.process_registry import process_registry
+
+        source = event.source
+        platform_name = source.platform.value if source.platform else ""
+        if not is_admin(platform_name, source.user_id or ""):
+            return "Only admins can kill processes."
+
+        proc_id = event.get_command_args().strip()
+        if not proc_id:
+            return "Usage: `/kill <proc_id>`\nUse `/ps` to list running processes."
+
+        result = process_registry.kill_process(proc_id)
+        if result.get("success") or result.get("status") == "killed":
+            return f"Killed process `{proc_id}`."
+        return f"Could not kill `{proc_id}`: {result.get('error', 'not found')}"
+
+    async def _handle_log_command(self, event: MessageEvent) -> str:
+        """Handle /log <proc_id> [lines] -- tail output of a background process."""
+        from tools.process_registry import process_registry
+
+        args = event.get_command_args().strip().split()
+        if not args:
+            return "Usage: `/log <proc_id> [lines]`\nUse `/ps` to list running processes."
+
+        proc_id = args[0]
+        limit = 30
+        if len(args) > 1:
+            try:
+                limit = min(int(args[1]), 100)
+            except ValueError:
+                pass
+
+        result = process_registry.read_log(proc_id, limit=limit)
+        output = result.get("output", "")
+        if not output:
+            status = result.get("status", "unknown")
+            return f"No output for `{proc_id}` (status: {status})."
+
+        # Truncate for Telegram's 4096 char limit
+        if len(output) > 3500:
+            output = output[-3500:]
+        return f"**Log: `{proc_id}`** (last {limit} lines)\n\n```\n{output}\n```"
 
     async def _handle_compress_command(self, event: MessageEvent) -> str:
         """Handle /compress command -- manually compress conversation context."""
