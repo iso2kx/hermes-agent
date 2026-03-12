@@ -666,11 +666,59 @@ class TelegramAdapter(BasePlatformAdapter):
         return text
     
     async def _handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle incoming text messages."""
+        """Handle incoming text messages.
+
+        In groups, only responds when:
+        1. Bot is @mentioned in the message
+        2. Message is a reply to the bot's message
+        3. TELEGRAM_RESPOND_ALL_GROUP=true (opt-out of mention filter)
+        """
         if not update.message or not update.message.text:
             return
-        
-        event = self._build_message_event(update.message, MessageType.TEXT)
+
+        msg = update.message
+        chat = msg.chat
+
+        # Mention-based activation for groups
+        if chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
+            respond_all = os.getenv("TELEGRAM_RESPOND_ALL_GROUP", "").lower() in ("true", "1", "yes")
+            if not respond_all:
+                bot_mentioned = False
+                bot_replied_to = False
+
+                # Check if bot is @mentioned
+                if msg.entities and self._bot:
+                    bot_username = (self._bot.username or "").lower()
+                    for entity in msg.entities:
+                        if entity.type == "mention":
+                            mention_text = msg.text[entity.offset:entity.offset + entity.length].lower()
+                            if mention_text == f"@{bot_username}":
+                                bot_mentioned = True
+                                break
+                        elif entity.type == "text_mention" and self._bot.id:
+                            if entity.user and entity.user.id == self._bot.id:
+                                bot_mentioned = True
+                                break
+
+                # Check if replying to bot's message
+                if msg.reply_to_message and self._bot:
+                    reply_user = msg.reply_to_message.from_user
+                    if reply_user and reply_user.id == self._bot.id:
+                        bot_replied_to = True
+
+                if not bot_mentioned and not bot_replied_to:
+                    return  # Silently ignore non-targeted group messages
+
+        event = self._build_message_event(msg, MessageType.TEXT)
+
+        # Strip bot @mention from the message text for cleaner agent input
+        if self._bot and self._bot.username:
+            import re
+            event.text = re.sub(
+                rf'@{re.escape(self._bot.username)}\s*',
+                '', event.text, flags=re.IGNORECASE
+            ).strip()
+
         await self.handle_message(event)
     
     async def _handle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
