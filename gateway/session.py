@@ -312,15 +312,26 @@ def build_session_key(source: SessionSource) -> str:
 
     This is the single source of truth for session key construction.
     WhatsApp DMs include chat_id (multi-user), other DMs do not (single owner).
+
+    Per-user group isolation: when GROUP_SESSION_PER_USER=true (env var),
+    each user in a group gets their own session context instead of sharing.
     """
     platform = source.platform.value
+    per_user = os.getenv("GROUP_SESSION_PER_USER", "").lower() in ("true", "1", "yes")
+
     if source.chat_type == "dm":
         if platform == "whatsapp" and source.chat_id:
             return f"agent:main:{platform}:dm:{source.chat_id}"
         return f"agent:main:{platform}:dm"
     if source.thread_id:
-        return f"agent:main:{platform}:{source.chat_type}:{source.chat_id}:{source.thread_id}"
-    return f"agent:main:{platform}:{source.chat_type}:{source.chat_id}"
+        base = f"agent:main:{platform}:{source.chat_type}:{source.chat_id}:{source.thread_id}"
+        if per_user and source.user_id:
+            return f"{base}:user:{source.user_id}"
+        return base
+    base = f"agent:main:{platform}:{source.chat_type}:{source.chat_id}"
+    if per_user and source.user_id:
+        return f"{base}:user:{source.user_id}"
+    return base
 
 
 class SessionStore:
