@@ -885,7 +885,7 @@ class GatewayRunner:
                           "compress", "usage", "insights", "reload-mcp", "reload_mcp",
                           "update", "title", "resume", "provider", "rollback",
                           "background", "reasoning", "role",
-                          "ps", "kill", "log", "voice"}
+                          "ps", "kill", "log", "voice", "notify"}
         if command and command in _known_commands:
             await self.hooks.emit(f"command:{command}", {
                 "platform": source.platform.value if source.platform else "",
@@ -968,6 +968,9 @@ class GatewayRunner:
 
         if command == "voice":
             return await self._handle_voice_command(event)
+
+        if command == "notify":
+            return await self._handle_notify_command(event)
 
         # User-defined quick commands (bypass agent loop, no LLM call)
         if command:
@@ -2482,6 +2485,86 @@ class GatewayRunner:
         if not current:
             return f"Voice mode: **{state}**\nI'll reply with voice messages from now on."
         return f"Voice mode: **{state}**\nSwitched back to text replies."
+
+    async def _handle_notify_command(self, event: MessageEvent) -> str:
+        """Handle /notify command -- quick setup for recurring group notifications (admin only).
+
+        Usage:
+            /notify list                      List active notification jobs for this chat
+            /notify add <schedule> <prompt>    Create a recurring notification
+            /notify remove <job_id>            Remove a notification
+
+        Examples:
+            /notify add every 2h summarize latest crypto news
+            /notify add daily at 9am give a market overview
+        """
+        from gateway.roles import is_admin
+        source = event.source
+        platform_name = source.platform.value if source.platform else ""
+
+        if not is_admin(platform_name, source.user_id or ""):
+            return "Only admins can manage notifications."
+
+        args = event.get_command_args().strip()
+        if not args:
+            return (
+                "**Group Notifications**\n\n"
+                "Usage:\n"
+                "  `/notify list` — show active notifications\n"
+                "  `/notify add <schedule> <prompt>` — create notification\n"
+                "  `/notify remove <job_id>` — remove notification\n\n"
+                "Schedule examples: `every 2h`, `every 30m`, `daily at 9am`\n"
+                "The prompt tells the agent what to research and post."
+            )
+
+        parts = args.split(None, 1)
+        subcommand = parts[0].lower()
+
+        if subcommand == "list":
+            from cron.jobs import list_jobs
+            jobs = list_jobs()
+            # Filter to jobs targeting this chat
+            chat_target = f"{platform_name}:{source.chat_id}"
+            relevant = [j for j in jobs if j.get("deliver") == chat_target
+                       or (j.get("deliver") == "origin"
+                           and j.get("origin", {}).get("chat_id") == source.chat_id)]
+            if not relevant:
+                return "No active notifications for this chat."
+            lines = ["**Active Notifications:**\n"]
+            for j in relevant:
+                lines.append(f"`{j['id'][:8]}` — {j.get('schedule', '?')} — {j.get('prompt', '?')[:60]}")
+            return "\n".join(lines)
+
+        if subcommand == "add" and len(parts) > 1:
+            rest = parts[1]
+            # Parse "every Xm/Xh" or pass through as natural language schedule
+            from cron.jobs import create_job
+            origin_dict = source.to_dict()
+            deliver_target = f"{platform_name}:{source.chat_id}"
+            try:
+                job = create_job(
+                    prompt=rest,
+                    schedule=None,  # Let the agent figure out schedule from the prompt
+                    deliver=deliver_target,
+                    origin=origin_dict,
+                )
+                return f"Notification created: `{job['id'][:8]}`\nThe agent will handle scheduling from the prompt."
+            except Exception as e:
+                return f"Failed to create notification: {e}"
+
+        if subcommand == "remove" and len(parts) > 1:
+            job_id_prefix = parts[1].strip()
+            from cron.jobs import list_jobs, remove_job
+            jobs = list_jobs()
+            matched = [j for j in jobs if j["id"].startswith(job_id_prefix)]
+            if not matched:
+                return f"No job found matching `{job_id_prefix}`."
+            removed = remove_job(matched[0]["id"])
+            if removed:
+                return f"Removed notification `{matched[0]['id'][:8]}`."
+            return "Failed to remove notification."
+
+        return "Unknown subcommand. Use `/notify` for help."
 
     async def _handle_compress_command(self, event: MessageEvent) -> str:
         """Handle /compress command -- manually compress conversation context."""
