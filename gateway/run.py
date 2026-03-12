@@ -598,6 +598,20 @@ class GatewayRunner:
         if connected_count > 0:
             logger.info("Gateway running with %s platform(s)", connected_count)
         
+        # Start WebChat server if WEBCHAT_PORT is set
+        if os.getenv("WEBCHAT_PORT"):
+            try:
+                from gateway.platforms.webchat import WebChatAdapter
+                webchat = WebChatAdapter(self.config)
+                webchat.set_message_handler(self._handle_message)
+                if await webchat.connect():
+                    self._webchat_adapter = webchat
+                    connected_count += 1
+                    token_hint = f"?token={os.getenv('WEBCHAT_TOKEN')}" if os.getenv('WEBCHAT_TOKEN') else ""
+                    logger.info("WebChat UI: http://localhost:%s/%s", os.getenv("WEBCHAT_PORT"), token_hint)
+            except Exception as e:
+                logger.warning("WebChat failed to start: %s", e)
+
         # Build initial channel directory for send_message name resolution
         try:
             from gateway.channel_directory import build_channel_directory
