@@ -718,7 +718,8 @@ class GatewayRunner:
         logger.info("Stopping gateway...")
         self._running = False
         
-        for platform, adapter in self.adapters.items():
+        # Iterate over a copy to avoid "dictionary changed size during iteration"
+        for platform, adapter in list(self.adapters.items()):
             try:
                 await adapter.disconnect()
                 logger.info("✓ %s disconnected", platform.value)
