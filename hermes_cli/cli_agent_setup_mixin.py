@@ -516,6 +516,7 @@ class CLIAgentSetupMixin:
                 platform="cli",
                 session_db=self._session_db,
                 ephemeral=getattr(self, "_ephemeral", False),
+                temp_strict=getattr(self, "_temp_strict", False),
                 clarify_callback=self._clarify_callback,
                 reasoning_callback=self._current_reasoning_callback(),
 

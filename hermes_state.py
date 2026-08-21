@@ -170,16 +170,16 @@ class SessionExportTooLargeError(ValueError):
 # flag on them, so the set of temporary session ids is registered here and
 # consulted at the single INSERT chokepoint. Process-local by design: a
 # temporary session never outlives the process that created it.
-_EPHEMERAL_SESSION_IDS: set[str] = set()
+_EPHEMERAL_SESSION_MODES: dict[str, str] = {}
 _EPHEMERAL_LOCK = threading.Lock()
 
 
-def mark_session_ephemeral(session_id: str) -> None:
-    """Register *session_id* as temporary so no row is ever persisted for it."""
+def mark_session_ephemeral(session_id: str, *, strict: bool = False) -> None:
+    """Register a session as temporary, optionally with strict read isolation."""
     if not session_id:
         return
     with _EPHEMERAL_LOCK:
-        _EPHEMERAL_SESSION_IDS.add(session_id)
+        _EPHEMERAL_SESSION_MODES[session_id] = "temp-strict" if strict else "temporary"
 
 
 def unmark_session_ephemeral(session_id: str) -> None:
@@ -187,7 +187,7 @@ def unmark_session_ephemeral(session_id: str) -> None:
     if not session_id:
         return
     with _EPHEMERAL_LOCK:
-        _EPHEMERAL_SESSION_IDS.discard(session_id)
+        _EPHEMERAL_SESSION_MODES.pop(session_id, None)
 
 
 def is_session_ephemeral(session_id: str) -> bool:
@@ -195,7 +195,20 @@ def is_session_ephemeral(session_id: str) -> bool:
     if not session_id:
         return False
     with _EPHEMERAL_LOCK:
-        return session_id in _EPHEMERAL_SESSION_IDS
+        return session_id in _EPHEMERAL_SESSION_MODES
+
+
+def get_session_mode(session_id: str) -> str:
+    """Return ``normal``, ``temporary``, or ``temp-strict`` for a session."""
+    if not session_id:
+        return "normal"
+    with _EPHEMERAL_LOCK:
+        return _EPHEMERAL_SESSION_MODES.get(session_id, "normal")
+
+
+def is_session_temp_strict(session_id: str) -> bool:
+    """Return whether *session_id* has strict temporary read isolation."""
+    return get_session_mode(session_id) == "temp-strict"
 
 _COMPRESSION_LOCK_HOLDER_PID_RE = re.compile(r"(?:^|:)pid=(\d+)(?::|$)")
 

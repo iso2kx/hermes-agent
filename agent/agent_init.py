@@ -533,6 +533,7 @@ def init_agent(
     pass_session_id: bool = False,
     persist_disabled: bool = False,
     ephemeral: bool = False,
+    temp_strict: bool = False,
     requested_provider: str = None,
 ):
     """
@@ -1633,7 +1634,7 @@ def init_agent(
         if agent.session_id:
             from hermes_state import mark_session_ephemeral
 
-            mark_session_ephemeral(agent.session_id)
+            mark_session_ephemeral(agent.session_id, strict=temp_strict)
     if agent._persist_disabled:
         # An ephemeral/isolated agent must not leave a JSON snapshot either,
         # even when sessions.write_json_snapshots is enabled above.
@@ -1754,7 +1755,7 @@ def init_agent(
             if _mem_provider_name and _mem_provider_name.strip():
                 from agent.memory_manager import MemoryManager as _MemoryManager
                 from plugins.memory import load_memory_provider as _load_mem
-                agent._memory_manager = _MemoryManager()
+                agent._memory_manager = _MemoryManager(session_id=agent.session_id or "")
                 _mp = _load_mem(_mem_provider_name)
                 if _mp and _mp.is_available():
                     agent._memory_manager.add_provider(_mp)

@@ -269,6 +269,13 @@ def build_top_level_parser():
     )
     _inherited_flag(
         parser,
+        "--temp-strict",
+        action="store_true",
+        default=False,
+        help="Temporary one-shot with automatic memory recall and historical session search disabled. Requires -q/--query.",
+    )
+    _inherited_flag(
+        parser,
         "--safe-mode",
         action="store_true",
         default=False,
@@ -478,6 +485,13 @@ def build_top_level_parser():
         action="store_true",
         default=argparse.SUPPRESS,
         help="Ephemeral one-shot: leave no trace (no session row, no JSON snapshot, no memory extraction). Requires -q/--query. Useful for batch-testing prompts without flooding the session list. For an interactive temporary chat, use /temp.",
+    )
+    _inherited_flag(
+        chat_parser,
+        "--temp-strict",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Temporary one-shot with automatic memory recall and historical session search disabled. Requires -q/--query.",
     )
     _inherited_flag(
         chat_parser,

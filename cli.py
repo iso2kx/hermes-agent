@@ -4292,6 +4292,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
         pass_session_id: bool = False,
         ignore_rules: bool = False,
         no_session: bool = False,
+        temp_strict: bool = False,
     ):
         """
         Initialize the Hermes CLI.
@@ -4644,7 +4645,8 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
         # Both mean "leave no trace", so both open no session store at all. Not
         # opening it is what makes the guarantee crash-proof: there is no row to
         # purge later, so a SIGKILL cannot strand a transcript on disk.
-        self._ephemeral: bool = bool(no_session)
+        self._ephemeral: bool = bool(no_session or temp_strict)
+        self._temp_strict: bool = bool(temp_strict)
         self.no_session = bool(no_session)
         if not self._ephemeral:
             try:
@@ -18238,6 +18240,7 @@ def main(
     ignore_user_config: bool = False,
     ignore_rules: bool = False,
     no_session: bool = False,
+    temp_strict: bool = False,
 ):
     """
     Hermes Agent CLI - Interactive AI Assistant
@@ -18338,6 +18341,17 @@ def main(
     # There is deliberately NO environment-variable form: AGENTS.md rejects new
     # user-facing non-secret HERMES_* env vars, and flag-only keeps this check
     # the single unbypassable gate into ephemeral CLI mode.
+    if temp_strict:
+        if resume:
+            raise ValueError(
+                "--temp-strict cannot be combined with --resume. "
+                "Strict mode must start a new temporary session."
+            )
+        if not query:
+            raise ValueError(
+                "--temp-strict requires a one-shot invocation (-q/--query). "
+                "For an interactive temporary chat, start normally and run /temp."
+            )
     if no_session:
         if resume:
             raise ValueError(
@@ -18399,6 +18413,7 @@ def main(
         pass_session_id=pass_session_id,
         ignore_rules=ignore_rules,
         no_session=no_session,
+        temp_strict=temp_strict,
     )
 
     if parsed_skills:

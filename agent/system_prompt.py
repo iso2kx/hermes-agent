@@ -542,7 +542,9 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     # External memory provider system prompt block (additive to built-in)
     if agent._memory_manager:
         try:
-            _ext_mem_block = agent._memory_manager.build_system_prompt()
+            _ext_mem_block = agent._memory_manager.build_system_prompt(
+                session_id=agent.session_id or ""
+            )
             if _ext_mem_block:
                 volatile_parts.append(_ext_mem_block)
         except Exception:

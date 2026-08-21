@@ -174,6 +174,7 @@ def run_oneshot(
     toolsets: object = None,
     usage_file: Optional[str] = None,
     no_session: bool = False,
+    temp_strict: bool = False,
 ) -> int:
     """Execute a single prompt and print only the final content block.
 
@@ -254,6 +255,7 @@ def run_oneshot(
                     toolsets=explicit_toolsets,
                     use_config_toolsets=use_config_toolsets,
                     no_session=no_session,
+                    temp_strict=temp_strict,
                 )
             except BaseException as exc:  # noqa: BLE001
                 # Capture anything that escapes the agent (including OSError
@@ -332,6 +334,7 @@ def _run_agent(
     toolsets: object = None,
     use_config_toolsets: bool = True,
     no_session: bool = False,
+    temp_strict: bool = False,
 ) -> tuple[str, dict]:
     """Build an AIAgent exactly like a normal CLI chat turn would, then
     run a single conversation.  Returns ``(final_response, run_result)``."""
@@ -451,7 +454,8 @@ def _run_agent(
             quiet_mode=True,
             platform="cli",
             session_db=session_db,
-            ephemeral=no_session,
+            ephemeral=no_session or temp_strict,
+            temp_strict=temp_strict,
             credential_pool=runtime.get("credential_pool"),
             fallback_model=_fb or None,
             # Interactive callbacks are intentionally NOT wired beyond this

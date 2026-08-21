@@ -180,6 +180,7 @@ def _run_and_exit_oneshot(
     provider: object = None,
     toolsets: object = None,
     usage_file: object = None,
+    temp_strict: bool = False,
 ) -> None:
     try:
         from hermes_cli.oneshot import run_oneshot
@@ -190,6 +191,7 @@ def _run_and_exit_oneshot(
             provider=provider,
             toolsets=toolsets,
             usage_file=usage_file,
+            temp_strict=temp_strict,
         )
     except KeyboardInterrupt:
         rc = 130
@@ -2766,6 +2768,7 @@ def cmd_chat(args):
         "ignore_user_config": getattr(args, "ignore_user_config", False) or getattr(args, "safe_mode", False),
         "compact": getattr(args, "compact", False),
         "no_session": getattr(args, "no_session", False),
+        "temp_strict": getattr(args, "temp_strict", False),
     }
     # Filter out None values
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -10971,6 +10974,12 @@ def _try_termux_fast_cli_launch() -> bool:
             "--no-session requires a one-shot invocation (-z/--oneshot or -q/--query). "
             "For an interactive temporary chat, start hermes normally and run /temp."
         )
+    if getattr(args, "temp_strict", False) and not getattr(args, "oneshot", None) \
+            and not getattr(args, "query", None) and not getattr(args, "q", None):
+        parser.error(
+            "--temp-strict requires a one-shot invocation (-z/--oneshot or -q/--query). "
+            "For an interactive temporary chat, start hermes normally and run /temp."
+        )
 
     if getattr(args, "oneshot", None):
         _prepare_agent_startup(args)
@@ -10981,6 +10990,7 @@ def _try_termux_fast_cli_launch() -> bool:
             toolsets=getattr(args, "toolsets", None),
             usage_file=getattr(args, "usage_file", None),
             no_session=getattr(args, "no_session", False),
+            temp_strict=getattr(args, "temp_strict", False),
         )
 
     if (args.resume or args.continue_last) and args.command is None:
@@ -12623,6 +12633,7 @@ def main():
             toolsets=getattr(args, "toolsets", None),
             usage_file=getattr(args, "usage_file", None),
             no_session=getattr(args, "no_session", False),
+            temp_strict=getattr(args, "temp_strict", False),
         )
 
     # Handle top-level --resume / --continue as shortcut to chat

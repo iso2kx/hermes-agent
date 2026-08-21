@@ -79,6 +79,35 @@ class TestTemporaryToolGuard:
         assert "temporary" in reason.lower() or "ephemeral" in reason.lower()
 
 
+class TestTemporarySessionModes:
+    def test_strict_mode_is_distinct_and_backward_compatible(self):
+        from hermes_state import (
+            get_session_mode,
+            is_session_ephemeral,
+            is_session_temp_strict,
+            mark_session_ephemeral,
+            unmark_session_ephemeral,
+        )
+
+        ordinary = "mode-ordinary"
+        strict = "mode-strict"
+        try:
+            mark_session_ephemeral(ordinary)
+            mark_session_ephemeral(strict, strict=True)
+            assert get_session_mode(ordinary) == "temporary"
+            assert is_session_ephemeral(ordinary)
+            assert not is_session_temp_strict(ordinary)
+            assert get_session_mode(strict) == "temp-strict"
+            assert is_session_ephemeral(strict)
+            assert is_session_temp_strict(strict)
+        finally:
+            unmark_session_ephemeral(ordinary)
+            unmark_session_ephemeral(strict)
+
+        assert get_session_mode(ordinary) == "normal"
+        assert get_session_mode(strict) == "normal"
+
+
 # ---------------------------------------------------------------------------
 # Gateway session entry
 # ---------------------------------------------------------------------------
@@ -140,6 +169,14 @@ class TestNoSessionFlag:
     def test_chat_bare_defaults_off(self, parser):
         """SUPPRESS on the subparser must not shadow the top-level default."""
         assert getattr(parser.parse_args(["chat"]), "no_session", False) is False
+
+    def test_temp_strict_flag(self, parser):
+        args = parser.parse_args(["-z", "hello", "--temp-strict"])
+        assert args.temp_strict is True
+        assert args.no_session is False
+
+    def test_chat_temp_strict_flag(self, parser):
+        assert parser.parse_args(["chat", "--temp-strict"]).temp_strict is True
 
 
 # ---------------------------------------------------------------------------

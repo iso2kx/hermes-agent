@@ -510,6 +510,7 @@ class AIAgent:
         pass_session_id: bool = False,
         persist_disabled: bool = False,
         ephemeral: bool = False,
+        temp_strict: bool = False,
         requested_provider: str = None,
     ):
         """Forwarder — see ``agent.agent_init.init_agent``."""
@@ -599,6 +600,7 @@ class AIAgent:
             pass_session_id=pass_session_id,
             persist_disabled=persist_disabled,
             ephemeral=ephemeral,
+            temp_strict=temp_strict,
         )
 
     def _get_session_db_for_recall(self):

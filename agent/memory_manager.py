@@ -368,7 +368,8 @@ class MemoryManager:
     provider is allowed.  Failures in one provider never block the other.
     """
 
-    def __init__(self, *, external_prefetch_timeout: Optional[float] = None) -> None:
+    def __init__(self, *, external_prefetch_timeout: Optional[float] = None, session_id: str = "") -> None:
+        self._session_id = session_id or ""
         self._providers: List[MemoryProvider] = []
         self._tool_to_provider: Dict[str, MemoryProvider] = {}
         self._has_external: bool = False  # True once a non-builtin provider is added
@@ -483,12 +484,19 @@ class MemoryManager:
 
     # -- System prompt -------------------------------------------------------
 
-    def build_system_prompt(self) -> str:
+    def build_system_prompt(self, *, session_id: str = "") -> str:
         """Collect system prompt blocks from all providers.
 
         Returns combined text, or empty string if no providers contribute.
         Each non-empty block is labeled with the provider name.
         """
+        effective_session_id = session_id or self._session_id
+        try:
+            from hermes_state import is_session_temp_strict
+            if is_session_temp_strict(effective_session_id):
+                return ""
+        except Exception:
+            pass
         blocks = []
         for provider in self._providers:
             try:
@@ -528,6 +536,13 @@ class MemoryManager:
         Returns merged context text labeled by provider. Empty providers
         are skipped. Failures in one provider don't block others.
         """
+        effective_session_id = session_id or self._session_id
+        try:
+            from hermes_state import is_session_temp_strict
+            if is_session_temp_strict(effective_session_id):
+                return ""
+        except Exception:
+            pass
         clean_query = self._strip_skill_scaffolding(query)
         if not clean_query:
             return ""
@@ -601,6 +616,13 @@ class MemoryManager:
         wedged provider can never block the caller. See ``sync_all`` for
         the full rationale (agent stuck "running" minutes after a turn).
         """
+        effective_session_id = session_id or self._session_id
+        try:
+            from hermes_state import is_session_temp_strict
+            if is_session_temp_strict(effective_session_id):
+                return
+        except Exception:
+            pass
         providers = list(self._providers)
         if not providers:
             return

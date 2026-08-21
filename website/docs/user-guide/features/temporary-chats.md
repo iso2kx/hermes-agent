@@ -20,6 +20,7 @@ down** on your machine.
 | Desktop | **New temporary session** in the sidebar, or `mod+alt+n` | Start any normal session |
 | CLI (interactive) | `/temp` — the prompt becomes an incognito `temp >` | `/temp off` |
 | CLI (one-shot) | `hermes --no-session -q "..."` | ends with the run |
+| CLI strict (one-shot) | `hermes --temp-strict -q "..."` | ends with the run |
 | Chat platforms | `/temp` | `/temp off` (`/temp status` to check) |
 
 Entering and leaving temporary mode always starts a fresh conversation: the
@@ -101,5 +102,25 @@ to do:
   to edit a file or run a command, that change persists — that is the point
   of tools. The conversation about it is what disappears.
 - **Background processes you start keep running** after the chat ends.
-- **Provider read queries still leave your machine** — recalling memory from
-  an external provider sends the query to that service, like in any chat.
+- **Provider read queries still leave your machine** — recalling memory from an
+  external provider sends the query to that service, like in any chat.
+
+## Strict temporary chats
+
+`--temp-strict` is a temporary one-shot mode with a narrower read policy. It
+still loads skills, project instructions, and the normal capability tools, but
+it disables automatic external memory-provider context, synchronous and
+background provider prefetch, and historical `session_search`. Explicit
+read-only memory-provider tools remain available according to each provider's
+existing tool classification; this mode does not make model-provider requests
+private or sandbox filesystem and terminal operations.
+
+| Feature | Normal | Temporary | `--temp-strict` |
+|---|---:|---:|---:|
+| Transcript/session persistence | yes | no | no |
+| Memory writes | yes | blocked | blocked |
+| Automatic provider recall | yes | yes | no |
+| Historical `session_search` | yes | yes | no |
+| Skills / project context | yes | yes | yes |
+| Terminal/file writes | yes | yes | yes |
+| Model-provider visibility | normal | unchanged | unchanged |

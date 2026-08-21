@@ -145,6 +145,26 @@ class TestMemoryProviderABC:
 
 
 class TestMemoryManager:
+    def test_strict_mode_blocks_automatic_reads(self):
+        from hermes_state import mark_session_ephemeral, unmark_session_ephemeral
+
+        sid = "memory-strict-test"
+        provider = FakeMemoryProvider("builtin")
+        provider._prompt_block = "external context"
+        provider._prefetch_result = "recalled context"
+        mgr = MemoryManager(session_id=sid)
+        mgr.add_provider(provider)
+        mark_session_ephemeral(sid, strict=True)
+        try:
+            assert mgr.build_system_prompt() == ""
+            assert mgr.prefetch_all("query") == ""
+            mgr.queue_prefetch_all("query")
+            mgr.flush_pending(timeout=0.2)
+            assert provider.prefetch_queries == []
+            assert provider.queued_prefetches == []
+        finally:
+            unmark_session_ephemeral(sid)
+
     def test_empty_manager(self):
         mgr = MemoryManager()
         assert mgr.providers == []
