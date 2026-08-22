@@ -80,6 +80,21 @@ class TestTemporaryToolGuard:
 
 
 class TestTemporarySessionModes:
+    def test_session_search_consults_the_strict_registry(self):
+        """The session_search executor must keep consulting the strict-mode
+        check, not merely have the helper exist on the module. If a refactor
+        drops the wiring, strict sessions quietly regain historical read
+        access while every helper-level test still passes."""
+        import inspect
+        from agent import agent_runtime_helpers as helpers
+        src = inspect.getsource(helpers)
+        start = src.index('function_name == "session_search"')
+        block = src[start : start + 2000]
+        assert "is_session_temp_strict" in block, (
+            "session_search no longer consults the strict-mode registry; "
+            "--temp-strict sessions would regain historical read access"
+        )
+
     def test_strict_mode_is_distinct_and_backward_compatible(self):
         from hermes_state import (
             get_session_mode,

@@ -491,12 +491,9 @@ class MemoryManager:
         Each non-empty block is labeled with the provider name.
         """
         effective_session_id = session_id or self._session_id
-        try:
-            from hermes_state import is_session_temp_strict
-            if is_session_temp_strict(effective_session_id):
-                return ""
-        except Exception:
-            pass
+        from hermes_state import is_session_temp_strict
+        if is_session_temp_strict(effective_session_id):
+            return ""
         blocks = []
         for provider in self._providers:
             try:
@@ -537,12 +534,9 @@ class MemoryManager:
         are skipped. Failures in one provider don't block others.
         """
         effective_session_id = session_id or self._session_id
-        try:
-            from hermes_state import is_session_temp_strict
-            if is_session_temp_strict(effective_session_id):
-                return ""
-        except Exception:
-            pass
+        from hermes_state import is_session_temp_strict
+        if is_session_temp_strict(effective_session_id):
+            return ""
         clean_query = self._strip_skill_scaffolding(query)
         if not clean_query:
             return ""
@@ -617,12 +611,9 @@ class MemoryManager:
         the full rationale (agent stuck "running" minutes after a turn).
         """
         effective_session_id = session_id or self._session_id
-        try:
-            from hermes_state import is_session_temp_strict
-            if is_session_temp_strict(effective_session_id):
-                return
-        except Exception:
-            pass
+        from hermes_state import is_session_temp_strict
+        if is_session_temp_strict(effective_session_id):
+            return
         providers = list(self._providers)
         if not providers:
             return
