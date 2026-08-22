@@ -986,6 +986,7 @@ class CLICommandsMixin:
             # durable was ever written.
             self.new_session(silent=True)
             self._ephemeral = False
+            self._temp_strict = False
             self.no_session = False
             # Re-open the session store that ephemeral mode deliberately left
             # closed, then rebuild the agent so it picks up the live store and

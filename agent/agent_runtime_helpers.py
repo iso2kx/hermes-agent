@@ -3060,6 +3060,12 @@ def invoke_tool(agent, function_name: str, function_args: dict, effective_task_i
             )
     elif function_name == "session_search":
         def _execute(next_args: dict) -> Any:
+            from hermes_state import is_session_temp_strict
+            if is_session_temp_strict(getattr(agent, "session_id", "") or ""):
+                return _finish_agent_tool(json.dumps({
+                    "success": False,
+                    "error": "Historical session search is disabled in --temp-strict sessions.",
+                }), next_args)
             session_db = agent._get_session_db_for_recall()
             if not session_db:
                 from hermes_state import format_session_db_unavailable
